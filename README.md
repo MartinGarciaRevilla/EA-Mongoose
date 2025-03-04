@@ -2,6 +2,9 @@
 
 ## Requisitos Previos
 
+Video Explicatiu del codi modificat: https://www.youtube.com/watch?v=TyK11BaCGFY Referencies: codi profesor y chatGPT
+
+
 Asegúrate de tener instalados los siguientes programas en tu sistema:
 
 - [Node.js](https://nodejs.org/) (versión 14.x o superior)
