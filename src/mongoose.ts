@@ -1,7 +1,6 @@
 import mongoose from 'mongoose';
 import { UserModel, IUser } from './user.js';
 import { PostModel, IPost } from './post.js';
-import { CommentModel, IComment } from './comment.js'
 
 async function main() {
   mongoose.set('strictQuery', true);
@@ -19,7 +18,7 @@ async function main() {
 
   console.log("user1:", user1);
   const newUser = new UserModel(user1);
-  const user2 = await newUser.save(); // user2 ahora es una instancia del modelo
+  const user2 = await newUser.save();
   console.log("Usuario creado:", user2);
 
   // Crear un post vinculado al usuario
@@ -33,48 +32,60 @@ async function main() {
   const savedPost = await newPost.save();
   console.log("Post creado:", savedPost);
 
-  // Crear un comentario vinculado al post y usuario
-  const comment1: IComment = {
-    content: '¡Me encantó este post!',
-    author: user2._id as mongoose.Types.ObjectId,
-    post: savedPost._id as mongoose.Types.ObjectId
-  };
+  // Agregar un comentario embebido dentro del post
+  const postToUpdate = await PostModel.findById(savedPost._id);
+  if (postToUpdate) {
+    postToUpdate.comments?.push({
+      content: '¡Me encantó este post!',
+      author: user2._id as mongoose.Types.ObjectId
+    });
 
-  const newComment = new CommentModel(comment1);
-  const savedComment = await newComment.save();
-  console.log("Comentario creado:", savedComment);
+    await postToUpdate.save();
+    console.log("Comentario agregado al post:", postToUpdate);
+  }
 
-  // Vincular post y comentario al usuario
+  // Asociar el post al usuario
   user2.posts?.push(savedPost._id as mongoose.Types.ObjectId);
-  user2.comments?.push(savedComment._id as mongoose.Types.ObjectId);
   await user2.save();
 
-  // Vincular comentario al post
-  savedPost.comments?.push(savedComment._id as mongoose.Types.ObjectId);
-  await savedPost.save();
-
-  // Leer usuario con sus posts y comentarios
+  // Leer usuario con sus posts
   const populatedUser = await UserModel.findById(user2._id)
-    .populate('posts')
-    .populate('comments');
-  console.log("Usuario con posts y comentarios:", populatedUser);
+    .populate('posts');
+  console.log("Usuario con posts:", populatedUser);
 
-  // Leer post con sus comentarios
-  const populatedPost = await PostModel.findById(savedPost._id).populate('comments');
-  console.log("Post con comentarios:", populatedPost);
+  // Leer post con comentarios embebidos
+  const populatedPost = await PostModel.findById(savedPost._id);
+  console.log("Post con comentarios embebidos:", populatedPost);
 
   // Actualizar un post
   await PostModel.updateOne({ _id: savedPost._id }, { title: 'Título actualizado' });
   console.log("Post actualizado");
 
-  // Eliminar un comentario
-  await CommentModel.deleteOne({ _id: savedComment._id });
-  console.log("Comentario eliminado");
+  // Actualizar un comentario embebido
+  const postWithComment = await PostModel.findById(savedPost._id);
+  if (postWithComment) {
+    const comment = postWithComment.comments?.find(c => c.author.equals(user2._id));
+    if (comment) {
+      comment.content = "Comentario actualizado";
+      await postWithComment.save();
+      console.log("Comentario actualizado:", postWithComment);
+    }
+  }
 
-  // Aggregation: contar comentarios por post
-  const commentCount = await CommentModel.aggregate([
-    { $match: { post: savedPost._id } },
-    { $group: { _id: '$post', totalComments: { $sum: 1 } } }
+  // Eliminar un comentario embebido
+  const postToDeleteComment = await PostModel.findById(savedPost._id);
+  if (postToDeleteComment) {
+    postToDeleteComment.comments = postToDeleteComment.comments?.filter(
+      c => !c.author.equals(user2._id)
+    ) || [];
+    await postToDeleteComment.save();
+    console.log("Comentario eliminado:", postToDeleteComment);
+  }
+
+  // Aggregation: contar comentarios en un post
+  const commentCount = await PostModel.aggregate([
+    { $match: { _id: savedPost._id } },
+    { $project: { totalComments: { $size: "$comments" } } }
   ]);
   console.log("Número de comentarios en el post:", commentCount);
 
